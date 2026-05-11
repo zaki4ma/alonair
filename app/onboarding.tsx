@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, Dimensions,
   TouchableOpacity, Pressable, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import Svg, {
@@ -16,6 +17,7 @@ import Animated, {
 import { Colors, Categories } from '@/constants/colors';
 
 const { width: SW, height: SH } = Dimensions.get('window');
+const ONBOARDING_DONE_KEY = 'onboarding_done';
 
 // ─────────────────────────────────────────────
 // Slide 1 — コンセプト illustration
@@ -405,9 +407,13 @@ export default function Onboarding() {
     if (i !== activeIndex) setActiveIndex(i);
   };
 
-  const handleStart = () => {
-    // TODO: navigate to checkin when that screen is ready
-    router.replace('/onboarding');
+  const handleStart = async () => {
+    try {
+      await AsyncStorage.setItem(ONBOARDING_DONE_KEY, '1');
+    } catch {
+      // Continue into the app even if local persistence is temporarily unavailable.
+    }
+    router.replace('/checkin' as never);
   };
 
   return (
