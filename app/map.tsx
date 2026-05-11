@@ -7,7 +7,18 @@ import Animated, {
 import Svg, { Line, Circle as SvgCircle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Camera, Pencil, LogOut, Play, Pause, Send, History, Settings } from 'lucide-react-native';
+import {
+  Camera,
+  Pencil,
+  LogOut,
+  Play,
+  Pause,
+  Send,
+  History,
+  Settings,
+  Check,
+  Circle as CircleIcon,
+} from 'lucide-react-native';
 import { Colors, Categories, CategoryId } from '../constants/colors';
 import { getSession, setSession } from '../store/session';
 import { ensureAnonymousAuth, getUid } from '../store/auth';
@@ -372,6 +383,10 @@ function NodeCard({
 // ── Bottom Bar ─────────────────────────────────────────────────────────────
 
 const POMO_SECS = 25 * 60;
+const POMO_BREAK_SECS = 5 * 60;
+const POMO_DONE_MS = 3000;
+
+type PomoPhase = 'focus' | 'done' | 'break';
 
 function BottomBar({
   accentColor, onRecheckin, onExit, bottomInset,
@@ -383,15 +398,59 @@ function BottomBar({
 }) {
   const [pomoSecs, setPomoSecs] = useState(POMO_SECS);
   const [pomoRunning, setPomoRunning] = useState(true);
+  const [pomoPhase, setPomoPhase] = useState<PomoPhase>('focus');
 
   useEffect(() => {
-    if (!pomoRunning || pomoSecs <= 0) return;
+    if (!pomoRunning || pomoPhase === 'done' || pomoSecs <= 0) return;
     const id = setInterval(() => setPomoSecs((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(id);
-  }, [pomoRunning, pomoSecs]);
+  }, [pomoPhase, pomoRunning, pomoSecs]);
 
-  const togglePomo = useCallback(() => setPomoRunning((r) => !r), []);
-  const iconColor = (active: boolean) => active ? '#fff' : Colors.slate;
+  useEffect(() => {
+    if (pomoPhase !== 'focus' || pomoSecs > 0) return;
+
+    setPomoPhase('done');
+    setPomoRunning(false);
+
+    const id = setTimeout(() => {
+      setPomoPhase('break');
+      setPomoSecs(POMO_BREAK_SECS);
+      setPomoRunning(true);
+    }, POMO_DONE_MS);
+
+    return () => clearTimeout(id);
+  }, [pomoPhase, pomoSecs]);
+
+  useEffect(() => {
+    if (pomoPhase !== 'break' || pomoSecs > 0) return;
+    setPomoRunning(false);
+  }, [pomoPhase, pomoSecs]);
+
+  const togglePomo = useCallback(() => {
+    if (pomoPhase === 'done') return;
+    if (pomoPhase === 'break' && pomoSecs === 0) {
+      setPomoPhase('focus');
+      setPomoSecs(POMO_SECS);
+      setPomoRunning(true);
+      return;
+    }
+    setPomoRunning((r) => !r);
+  }, [pomoPhase, pomoSecs]);
+
+  const pomoActive = pomoRunning || pomoPhase === 'done';
+  const pomoBg = pomoPhase === 'done'
+    ? '#66BB6A'
+    : pomoPhase === 'break'
+      ? Colors.line
+      : pomoRunning
+        ? accentColor
+        : Colors.line;
+  const pomoTextColor = pomoActive && pomoPhase !== 'break' ? '#fff' : Colors.slate;
+  const pomoLabel = pomoPhase === 'done'
+    ? 'お疲れさま！'
+    : pomoPhase === 'break'
+      ? (pomoSecs === 0 ? '休憩完了' : '休憩')
+      : (pomoRunning ? '集中' : '停止中');
 
   return (
     <View style={[styles.bottomBar, { paddingBottom: Math.max(bottomInset, 16) }]}>
@@ -403,18 +462,26 @@ function BottomBar({
 
       {/* Pomodoro pill */}
       <Pressable
-        style={[styles.pomoPill, { backgroundColor: pomoRunning ? accentColor : Colors.line }]}
+        style={[styles.pomoPill, { backgroundColor: pomoBg }]}
         onPress={togglePomo}
       >
-        {pomoRunning
-          ? <Play size={14} color="#fff" fill="#fff" />
-          : <Pause size={14} color={Colors.slate} fill={Colors.slate} />}
-        <Text style={[styles.pomoLabel, { color: iconColor(pomoRunning) }]}>
-          {pomoRunning ? '集中' : '停止中'}
+        {pomoPhase === 'done' ? (
+          <Check size={15} color="#fff" strokeWidth={2.8} />
+        ) : pomoPhase === 'break' ? (
+          <CircleIcon size={14} color={pomoTextColor} strokeWidth={2.2} />
+        ) : pomoRunning ? (
+          <Play size={14} color="#fff" fill="#fff" />
+        ) : (
+          <Pause size={14} color={Colors.slate} fill={Colors.slate} />
+        )}
+        <Text style={[styles.pomoLabel, { color: pomoTextColor }]}>
+          {pomoLabel}
         </Text>
-        <Text style={[styles.pomoTime, { color: iconColor(pomoRunning) }]}>
-          {formatMS(pomoSecs)}
-        </Text>
+        {pomoPhase !== 'done' && (
+          <Text style={[styles.pomoTime, { color: pomoTextColor }]}>
+            {formatMS(pomoSecs)}
+          </Text>
+        )}
       </Pressable>
 
       {/* DNA screen */}
