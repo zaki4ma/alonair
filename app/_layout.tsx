@@ -4,6 +4,7 @@ import { useFonts, Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold, Outf
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
+import { ensureAnonymousAuth } from '../store/auth';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -14,6 +15,10 @@ export default function RootLayout() {
     Outfit_600SemiBold,
     Outfit_700Bold,
   });
+
+  useEffect(() => {
+    ensureAnonymousAuth().catch(console.error);
+  }, []);
 
   useEffect(() => {
     if (loaded) SplashScreen.hideAsync();
