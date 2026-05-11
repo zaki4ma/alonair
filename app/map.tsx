@@ -7,7 +7,7 @@ import Animated, {
 import Svg, { Line, Circle as SvgCircle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Camera, Pencil, LogOut, Play, Pause, Send, History } from 'lucide-react-native';
+import { Camera, Pencil, LogOut, Play, Pause, Send, History, Settings } from 'lucide-react-native';
 import { Colors, Categories, CategoryId } from '../constants/colors';
 import { getSession, setSession } from '../store/session';
 import { ensureAnonymousAuth, getUid } from '../store/auth';
@@ -427,6 +427,12 @@ function BottomBar({
       <Pressable style={styles.iconBtn} onPress={() => router.push('/history' as never)} hitSlop={8}>
         <History size={24} color={Colors.charcoal} strokeWidth={1.8} />
         <Text style={styles.iconBtnLabel}>履歴</Text>
+      </Pressable>
+
+      {/* Settings screen */}
+      <Pressable style={styles.iconBtn} onPress={() => router.push('/settings' as never)} hitSlop={8}>
+        <Settings size={24} color={Colors.charcoal} strokeWidth={1.8} />
+        <Text style={styles.iconBtnLabel}>設定</Text>
       </Pressable>
 
       {/* Exit */}
@@ -859,11 +865,11 @@ const styles = StyleSheet.create({
   // Bottom bar
   bottomBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 12,
+    paddingHorizontal: 12, paddingTop: 12,
     borderTopWidth: 1, borderTopColor: Colors.line,
-    backgroundColor: Colors.card, gap: 8,
+    backgroundColor: Colors.card, gap: 6,
   },
-  iconBtn: { alignItems: 'center', width: 52 },
+  iconBtn: { alignItems: 'center', width: 44 },
   iconBtnLabel: { fontSize: 11, color: Colors.charcoal, marginTop: 4, fontFamily: 'Outfit_500Medium' },
   pomoPill: {
     flex: 1, flexDirection: 'row', alignItems: 'center',

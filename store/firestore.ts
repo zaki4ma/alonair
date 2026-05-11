@@ -7,7 +7,9 @@ import {
   getDoc,
   getDocs,
   collection,
+  deleteDoc,
   query,
+  writeBatch,
   where,
   onSnapshot,
   serverTimestamp,
@@ -100,6 +102,29 @@ export async function sendReaction(fromUid: string, toUid: string, kind: string)
 
 export async function markReactionSeen(reactionId: string): Promise<void> {
   await updateDoc(doc(db, 'reactions', reactionId), { seen: true });
+}
+
+export async function deleteUserData(uid: string): Promise<void> {
+  await deleteDoc(doc(db, 'checkins', uid));
+
+  const historySnap = await getDocs(query(
+    collection(db, 'checkinHistory'),
+    where('uid', '==', uid)
+  ));
+  const sentReactionsSnap = await getDocs(query(
+    collection(db, 'reactions'),
+    where('fromUid', '==', uid)
+  ));
+  const receivedReactionsSnap = await getDocs(query(
+    collection(db, 'reactions'),
+    where('toUid', '==', uid)
+  ));
+
+  const batch = writeBatch(db);
+  historySnap.docs.forEach((historyDoc) => batch.delete(historyDoc.ref));
+  sentReactionsSnap.docs.forEach((reactionDoc) => batch.delete(reactionDoc.ref));
+  receivedReactionsSnap.docs.forEach((reactionDoc) => batch.delete(reactionDoc.ref));
+  await batch.commit();
 }
 
 // ── Real-time read ─────────────────────────────────────────────────────────
