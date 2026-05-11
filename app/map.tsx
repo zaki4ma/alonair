@@ -48,6 +48,7 @@ const REACTION_KINDS = [
 
 interface NodeData {
   id: string;
+  uid: string;
   username: string;
   keywords: string[];
   status?: string;
@@ -83,6 +84,7 @@ function checkinToNode(doc: CheckinDoc & { id: string }): NodeData {
   const pos = uidToPosition(doc.uid);
   return {
     id: doc.id,
+    uid: doc.uid,
     username: doc.uid.slice(0, 6),
     keywords: doc.keywords.slice(0, 2),
     status: doc.status || undefined,
@@ -323,7 +325,7 @@ function NodeCard({
     >
       {onPress && (
         <Pressable
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, styles.nodePressTarget]}
           onPress={onPress}
           hitSlop={24}
         />
@@ -627,7 +629,7 @@ export default function MapScreen() {
     if (!reactionTarget || sendingReaction) return;
 
     const now = Date.now();
-    const cooldownUntil = reactionCooldowns[reactionTarget.id] ?? 0;
+    const cooldownUntil = reactionCooldowns[reactionTarget.uid] ?? 0;
     if (cooldownUntil > now) return;
 
     const fromUid = getUid();
@@ -636,11 +638,11 @@ export default function MapScreen() {
     setSendingReaction(true);
     setReactionCooldowns((prev) => ({
       ...prev,
-      [reactionTarget.id]: now + 60_000,
+      [reactionTarget.uid]: now + 60_000,
     }));
 
     try {
-      await sendReaction(fromUid, reactionTarget.id, kind);
+      await sendReaction(fromUid, reactionTarget.uid, kind);
       setRippleTargetId(reactionTarget.id);
       setReactionTarget(null);
       setTimeout(() => {
@@ -650,7 +652,7 @@ export default function MapScreen() {
       console.error('[Reaction]', e);
       setReactionCooldowns((prev) => ({
         ...prev,
-        [reactionTarget.id]: 0,
+        [reactionTarget.uid]: 0,
       }));
     } finally {
       setSendingReaction(false);
@@ -659,6 +661,7 @@ export default function MapScreen() {
 
   const youNode: NodeData = {
     id: 'you',
+    uid: getUid() ?? 'you',
     username: 'あなた',
     keywords: session?.keywords.slice(0, 2) ?? ['作業中'],
     status: currentStatus || undefined,
@@ -673,7 +676,7 @@ export default function MapScreen() {
   const allNodes: NodeData[] = [youNode, ...spacedOtherNodes];
   const connections = buildConnections(youNode.keywords, spacedOtherNodes);
   const rippleNode = allNodes.find((n) => n.id === rippleTargetId || n.hasRipple);
-  const reactionCooldownUntil = reactionTarget ? reactionCooldowns[reactionTarget.id] ?? 0 : 0;
+  const reactionCooldownUntil = reactionTarget ? reactionCooldowns[reactionTarget.uid] ?? 0 : 0;
   const reactionDisabled = sendingReaction || reactionCooldownUntil > Date.now();
 
   return (
@@ -900,6 +903,10 @@ const styles = StyleSheet.create({
   editBadge: {
     width: 16, height: 16, borderRadius: 4,
     alignItems: 'center', justifyContent: 'center',
+  },
+  nodePressTarget: {
+    zIndex: 20,
+    elevation: 20,
   },
   nodeCard: {
     width: NODE_W,
