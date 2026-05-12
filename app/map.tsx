@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import {
-  Camera,
+  MessageCircle,
   Pencil,
   LogOut,
   Play,
@@ -394,10 +394,10 @@ type PomoPhase = 'focus' | 'done' | 'break';
 type PomoNotificationPhase = Exclude<PomoPhase, 'done'>;
 
 function BottomBar({
-  accentColor, onRecheckin, onExit, bottomInset,
+  accentColor, onEditStatus, onExit, bottomInset,
 }: {
   accentColor: string;
-  onRecheckin: () => void;
+  onEditStatus: () => void;
   onExit: () => void;
   bottomInset: number;
 }) {
@@ -560,17 +560,14 @@ function BottomBar({
 
   return (
     <View style={[styles.bottomBar, { paddingBottom: Math.max(bottomInset, 16) }]}>
-      {/* Re-checkin */}
+      {/* Status */}
       <Pressable
         style={styles.iconBtn}
-        onPress={() => {
-          void cancelPomoNotification();
-          onRecheckin();
-        }}
+        onPress={onEditStatus}
         hitSlop={8}
       >
-        <Camera size={24} color={Colors.charcoal} strokeWidth={1.8} />
-        <Text style={styles.iconBtnLabel}>再認証</Text>
+        <MessageCircle size={24} color={Colors.charcoal} strokeWidth={1.8} />
+        <Text style={styles.iconBtnLabel}>ひとこと</Text>
       </Pressable>
 
       {/* Pomodoro pill */}
@@ -872,7 +869,7 @@ export default function MapScreen() {
 
       <BottomBar
         accentColor={accentColor}
-        onRecheckin={() => router.replace('/checkin' as never)}
+        onEditStatus={openStatusModal}
         onExit={handleExit}
         bottomInset={insets.bottom}
       />
