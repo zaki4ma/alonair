@@ -1,0 +1,128 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isValidCategory(category) {
+      return category in [
+        'study',
+        'work',
+        'read',
+        'gym',
+        'walk',
+        'fish',
+        'drink',
+        'cook',
+        'make',
+        'misc'
+      ];
+    }
+
+    function isValidMood(mood) {
+      return mood in ['集中', '発想', '創造', '探索'];
+    }
+
+    function hasOnlyCheckinFields(data) {
+      return data.keys().hasOnly([
+        'uid',
+        'category',
+        'keywords',
+        'tools',
+        'mood',
+        'colorTemp',
+        'density',
+        'status',
+        'createdAt',
+        'lastSeenAt',
+        'expiresAt',
+        'endedAt',
+        'isActive',
+        'activeHistoryId'
+      ]);
+    }
+
+    function hasValidCheckinShape(data) {
+      return data.uid is string
+        && isValidCategory(data.category)
+        && data.keywords is list
+        && data.keywords.size() <= 8
+        && (!('tools' in data) || data.tools is list)
+        && isValidMood(data.mood)
+        && data.colorTemp is number
+        && data.colorTemp >= 0
+        && data.colorTemp <= 1
+        && data.density is number
+        && data.density >= 0
+        && data.density <= 1
+        && data.status is string
+        && data.status.size() <= 15
+        && data.isActive is bool;
+    }
+
+    function isOwnCheckinWrite(data, uid) {
+      return isOwner(uid)
+        && data.uid == request.auth.uid
+        && hasOnlyCheckinFields(data)
+        && hasValidCheckinShape(data);
+    }
+
+    match /checkins/{uid} {
+      allow get: if signedIn();
+      allow list: if signedIn();
+
+      allow create, update: if isOwnCheckinWrite(request.resource.data, uid);
+      allow delete: if isOwner(uid);
+    }
+
+    match /checkinHistory/{id} {
+      allow get: if signedIn() && resource.data.uid == request.auth.uid;
+      allow list: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && hasOnlyCheckinFields(request.resource.data)
+        && hasValidCheckinShape(request.resource.data);
+
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && hasOnlyCheckinFields(request.resource.data)
+        && hasValidCheckinShape(request.resource.data);
+
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /reactions/{id} {
+      allow get: if signedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow list: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['fromUid', 'toUid', 'kind', 'createdAt', 'seen'])
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.kind in ['focus', 'energy', 'calm']
+        && request.resource.data.seen == false;
+
+      allow update: if signedIn()
+        && resource.data.toUid == request.auth.uid
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['seen'])
+        && request.resource.data.seen == true;
+
+      allow delete: if signedIn()
+        && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

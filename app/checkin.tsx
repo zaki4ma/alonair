@@ -151,15 +151,21 @@ export default function CheckinScreen() {
       });
       const uid = getUid();
       if (uid) {
-        saveCheckin(uid, {
-          category,
-          keywords: result.keywords,
-          tools: result.tools,
-          mood: result.mood,
-          colorTemp: result.colorTemp,
-          density: result.density,
-          status: statusText,
-        }).catch(console.error);
+        try {
+          await saveCheckin(uid, {
+            category,
+            keywords: result.keywords,
+            tools: result.tools,
+            mood: result.mood,
+            colorTemp: result.colorTemp,
+            density: result.density,
+            status: statusText,
+          });
+        } catch (error) {
+          console.error('[Checkin]', error);
+          Alert.alert('チェックインに失敗しました', '通信状態を確認して、もう一度お試しください。');
+          return;
+        }
       }
     }
     router.replace('/map' as never);

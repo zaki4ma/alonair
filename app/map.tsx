@@ -725,13 +725,19 @@ export default function MapScreen() {
   }, [currentStatus]);
 
   const saveStatus = useCallback(async () => {
+    const didChangeStatus = editingStatus !== currentStatus;
     setCurrentStatus(editingStatus);
     const current = getSession();
     if (current) setSession({ ...current, statusText: editingStatus });
     const uid = getUid();
     if (uid) updateCheckinStatus(uid, editingStatus).catch(console.error);
     setStatusModalVisible(false);
-  }, [editingStatus]);
+
+    if (didChangeStatus) {
+      setRippleTargetId('you');
+      setTimeout(() => setRippleTargetId((currentTarget) => currentTarget === 'you' ? null : currentTarget), 4200);
+    }
+  }, [currentStatus, editingStatus]);
 
   const handleExit = useCallback(async () => {
     const uid = getUid();
