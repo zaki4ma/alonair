@@ -26,6 +26,7 @@ import { ensureAnonymousAuth, getUid } from '../store/auth';
 import {
   endCheckin,
   getCheckinDates,
+  heartbeatCheckin,
   markReactionSeen,
   sendReaction,
   subscribeActiveCheckins,
@@ -656,6 +657,18 @@ export default function MapScreen() {
 
   useEffect(() => {
     const id = setInterval(() => setSessionSecs((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const uid = getUid();
+    if (!uid) return;
+
+    heartbeatCheckin(uid).catch(console.error);
+    const id = setInterval(() => {
+      heartbeatCheckin(uid).catch(console.error);
+    }, 30_000);
+
     return () => clearInterval(id);
   }, []);
 

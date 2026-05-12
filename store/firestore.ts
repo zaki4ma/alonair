@@ -18,6 +18,7 @@ import {
 import app from './firebase';
 
 const db = getFirestore(app);
+const CHECKIN_ACTIVE_TTL_MS = 2 * 60 * 1000;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ export interface CheckinDoc {
   density: number;
   status: string;
   createdAt: Timestamp;
+  lastSeenAt?: Timestamp;
+  expiresAt?: Timestamp;
   endedAt?: Timestamp;
   isActive: boolean;
   activeHistoryId?: string;
@@ -50,10 +53,13 @@ export async function saveCheckin(
   uid: string,
   data: Omit<CheckinDoc, 'uid' | 'createdAt' | 'isActive'>
 ): Promise<void> {
+  const expiresAt = Timestamp.fromMillis(Date.now() + CHECKIN_ACTIVE_TTL_MS);
   const historyRef = await addDoc(collection(db, 'checkinHistory'), {
     uid,
     ...data,
     createdAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+    expiresAt,
     isActive: true,
   });
 
@@ -61,6 +67,8 @@ export async function saveCheckin(
     uid,
     ...data,
     createdAt: serverTimestamp(),
+    lastSeenAt: serverTimestamp(),
+    expiresAt,
     isActive: true,
     activeHistoryId: historyRef.id,
   });
@@ -87,7 +95,20 @@ export async function endCheckin(uid: string): Promise<void> {
 }
 
 export async function updateCheckinStatus(uid: string, status: string): Promise<void> {
-  await updateDoc(doc(db, 'checkins', uid), { status });
+  await updateDoc(doc(db, 'checkins', uid), {
+    status,
+    lastSeenAt: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + CHECKIN_ACTIVE_TTL_MS),
+  });
+}
+
+export async function heartbeatCheckin(uid: string): Promise<void> {
+  const activeRef = doc(db, 'checkins', uid);
+  const expiresAt = Timestamp.fromMillis(Date.now() + CHECKIN_ACTIVE_TTL_MS);
+  await updateDoc(activeRef, {
+    lastSeenAt: serverTimestamp(),
+    expiresAt,
+  });
 }
 
 export async function sendReaction(fromUid: string, toUid: string, kind: string): Promise<void> {
@@ -133,14 +154,30 @@ export function subscribeActiveCheckins(
   category: string,
   callback: (docs: (CheckinDoc & { id: string })[]) => void
 ): () => void {
+  let latestDocs: (CheckinDoc & { id: string })[] = [];
+  const emitFreshDocs = () => {
+    const now = Date.now();
+    callback(latestDocs.filter((d) => {
+      const expiresAt = d.expiresAt?.toMillis?.();
+      return typeof expiresAt === 'number' && expiresAt > now;
+    }));
+  };
+
   const q = query(
     collection(db, 'checkins'),
     where('isActive', '==', true),
     where('category', '==', category)
   );
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as CheckinDoc) })));
+  const unsubscribeSnapshot = onSnapshot(q, (snap) => {
+    latestDocs = snap.docs.map((d) => ({ id: d.id, ...(d.data() as CheckinDoc) }));
+    emitFreshDocs();
   });
+  const freshnessTimer = setInterval(emitFreshDocs, 30_000);
+
+  return () => {
+    clearInterval(freshnessTimer);
+    unsubscribeSnapshot();
+  };
 }
 
 export function subscribeIncomingReactions(
