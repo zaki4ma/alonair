@@ -7,6 +7,7 @@ import Animated, {
 import Svg, { Line, Circle as SvgCircle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import {
   Camera,
   Pencil,
@@ -387,8 +388,10 @@ function NodeCard({
 const POMO_SECS = 25 * 60;
 const POMO_BREAK_SECS = 5 * 60;
 const POMO_DONE_MS = 3000;
+const POMO_NOTIFICATION_CHANNEL_ID = 'pomodoro';
 
 type PomoPhase = 'focus' | 'done' | 'break';
+type PomoNotificationPhase = Exclude<PomoPhase, 'done'>;
 
 function BottomBar({
   accentColor, onRecheckin, onExit, bottomInset,
@@ -402,6 +405,79 @@ function BottomBar({
   const [pomoRunning, setPomoRunning] = useState(true);
   const [pomoPhase, setPomoPhase] = useState<PomoPhase>('focus');
   const pomoEndsAtRef = useRef(Date.now() + POMO_SECS * 1000);
+  const pomoNotificationIdRef = useRef<string | null>(null);
+  const pomoNotificationRequestRef = useRef(0);
+
+  const cancelPomoNotification = useCallback(async () => {
+    pomoNotificationRequestRef.current += 1;
+    const notificationId = pomoNotificationIdRef.current;
+    if (!notificationId) return;
+
+    pomoNotificationIdRef.current = null;
+
+    try {
+      await Notifications.cancelScheduledNotificationAsync(notificationId);
+    } catch (error) {
+      console.warn('Failed to cancel pomodoro notification', error);
+    }
+  }, []);
+
+  const ensurePomoNotificationPermission = useCallback(async () => {
+    if (Platform.OS === 'web') return false;
+
+    try {
+      const current = await Notifications.getPermissionsAsync();
+      if (current.granted) return true;
+
+      const requested = await Notifications.requestPermissionsAsync();
+      return requested.granted;
+    } catch (error) {
+      console.warn('Failed to request notification permission', error);
+      return false;
+    }
+  }, []);
+
+  const schedulePomoNotification = useCallback(async (seconds: number, phase: PomoNotificationPhase) => {
+    await cancelPomoNotification();
+
+    const requestId = pomoNotificationRequestRef.current;
+    const triggerSeconds = Math.max(1, Math.ceil(seconds));
+    const hasPermission = await ensurePomoNotificationPermission();
+    if (!hasPermission || requestId !== pomoNotificationRequestRef.current) return;
+
+    const isFocus = phase === 'focus';
+
+    try {
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: isFocus ? '集中完了' : '休憩完了',
+          body: isFocus ? '25分お疲れさまです。休憩しましょう。' : '次の集中セッションを始められます。',
+          sound: true,
+          data: { type: isFocus ? 'pomodoro-focus-complete' : 'pomodoro-break-complete' },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: triggerSeconds,
+          channelId: POMO_NOTIFICATION_CHANNEL_ID,
+        },
+      });
+
+      if (requestId === pomoNotificationRequestRef.current) {
+        pomoNotificationIdRef.current = notificationId;
+      } else {
+        await Notifications.cancelScheduledNotificationAsync(notificationId);
+      }
+    } catch (error) {
+      console.warn('Failed to schedule pomodoro notification', error);
+    }
+  }, [cancelPomoNotification, ensurePomoNotificationPermission]);
+
+  useEffect(() => {
+    void schedulePomoNotification(POMO_SECS, 'focus');
+    return () => {
+      void cancelPomoNotification();
+    };
+  }, [cancelPomoNotification, schedulePomoNotification]);
 
   useEffect(() => {
     if (!pomoRunning || pomoPhase === 'done') return;
@@ -419,6 +495,7 @@ function BottomBar({
   useEffect(() => {
     if (pomoPhase !== 'focus' || pomoSecs > 0) return;
 
+    void cancelPomoNotification();
     setPomoPhase('done');
     setPomoRunning(false);
     pomoEndsAtRef.current = Date.now();
@@ -428,16 +505,18 @@ function BottomBar({
       setPomoSecs(POMO_BREAK_SECS);
       pomoEndsAtRef.current = Date.now() + POMO_BREAK_SECS * 1000;
       setPomoRunning(true);
+      void schedulePomoNotification(POMO_BREAK_SECS, 'break');
     }, POMO_DONE_MS);
 
     return () => clearTimeout(id);
-  }, [pomoPhase, pomoSecs]);
+  }, [cancelPomoNotification, pomoPhase, pomoSecs, schedulePomoNotification]);
 
   useEffect(() => {
     if (pomoPhase !== 'break' || pomoSecs > 0) return;
+    void cancelPomoNotification();
     setPomoRunning(false);
     pomoEndsAtRef.current = Date.now();
-  }, [pomoPhase, pomoSecs]);
+  }, [cancelPomoNotification, pomoPhase, pomoSecs]);
 
   const togglePomo = useCallback(() => {
     if (pomoPhase === 'done') return;
@@ -446,6 +525,7 @@ function BottomBar({
       setPomoSecs(POMO_SECS);
       pomoEndsAtRef.current = Date.now() + POMO_SECS * 1000;
       setPomoRunning(true);
+      void schedulePomoNotification(POMO_SECS, 'focus');
       return;
     }
 
@@ -454,12 +534,14 @@ function BottomBar({
       setPomoSecs(nextSecs);
       pomoEndsAtRef.current = Date.now();
       setPomoRunning(false);
+      void cancelPomoNotification();
       return;
     }
 
     pomoEndsAtRef.current = Date.now() + pomoSecs * 1000;
     setPomoRunning(true);
-  }, [pomoPhase, pomoRunning, pomoSecs]);
+    void schedulePomoNotification(pomoSecs, pomoPhase === 'break' ? 'break' : 'focus');
+  }, [cancelPomoNotification, pomoPhase, pomoRunning, pomoSecs, schedulePomoNotification]);
 
   const pomoActive = pomoRunning || pomoPhase === 'done';
   const pomoBg = pomoPhase === 'done'
@@ -479,7 +561,14 @@ function BottomBar({
   return (
     <View style={[styles.bottomBar, { paddingBottom: Math.max(bottomInset, 16) }]}>
       {/* Re-checkin */}
-      <Pressable style={styles.iconBtn} onPress={onRecheckin} hitSlop={8}>
+      <Pressable
+        style={styles.iconBtn}
+        onPress={() => {
+          void cancelPomoNotification();
+          onRecheckin();
+        }}
+        hitSlop={8}
+      >
         <Camera size={24} color={Colors.charcoal} strokeWidth={1.8} />
         <Text style={styles.iconBtnLabel}>再認証</Text>
       </Pressable>
@@ -527,7 +616,14 @@ function BottomBar({
       </Pressable>
 
       {/* Exit */}
-      <Pressable style={styles.iconBtn} onPress={onExit} hitSlop={8}>
+      <Pressable
+        style={styles.iconBtn}
+        onPress={() => {
+          void cancelPomoNotification();
+          onExit();
+        }}
+        hitSlop={8}
+      >
         <LogOut size={24} color={Colors.slate} strokeWidth={1.8} />
         <Text style={[styles.iconBtnLabel, { color: Colors.slate }]}>退出</Text>
       </Pressable>
