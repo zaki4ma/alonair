@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { useEffect } from 'react';
 import { useFonts, Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold, Outfit_700Bold } from '@expo-google-fonts/outfit';
 import * as SplashScreen from 'expo-splash-screen';
@@ -19,6 +19,7 @@ Notifications.setNotificationHandler({
 });
 
 export default function RootLayout() {
+  const pathname = usePathname();
   const [loaded] = useFonts({
     Outfit_400Regular,
     Outfit_500Medium,
@@ -27,8 +28,9 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    if (Platform.OS === 'web' && pathname === '/admin') return;
     ensureAnonymousAuth().catch(console.error);
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;

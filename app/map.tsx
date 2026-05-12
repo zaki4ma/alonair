@@ -59,11 +59,30 @@ interface NodeData {
   status?: string;
   mood: string;
   isYou?: boolean;
+  isBot?: boolean;
   isDozed?: boolean;
   hasRipple?: boolean;
   x: number; // 0–1 fraction of canvas width
   y: number; // 0–1 fraction of canvas height
   seed: number;
+}
+
+const KEEPER_VISIBLE_MAX_PEOPLE = 2;
+
+function buildKeeperNode(category: CategoryId): NodeData {
+  const cat = Categories[category];
+  return {
+    id: `keeper-${category}`,
+    uid: `bot:keeper:${category}`,
+    username: 'Keeper',
+    keywords: [cat.label, 'Room guide'],
+    status: 'Quietly watching this room',
+    mood: 'calm',
+    isBot: true,
+    x: 0.78,
+    y: 0.32,
+    seed: 17,
+  };
 }
 
 // ── UID helpers ────────────────────────────────────────────────────────────
@@ -103,7 +122,7 @@ function checkinToNode(doc: CheckinDoc & { id: string }): NodeData {
 function buildConnections(myKeywords: string[], others: NodeData[]): [string, string][] {
   const mySet = new Set(myKeywords);
   return others
-    .filter((n) => n.keywords.some((kw) => mySet.has(kw)))
+    .filter((n) => !n.isBot && n.keywords.some((kw) => mySet.has(kw)))
     .map((n) => ['you', n.id] as [string, string]);
 }
 
@@ -355,16 +374,24 @@ function NodeCard({
         </View>
       )}
 
+      {node.isBot && (
+        <View style={styles.botBadge}>
+          <Text style={styles.botBadgeText}>BOT</Text>
+        </View>
+      )}
+
       {/* Card */}
       <View style={[
         styles.nodeCard,
         node.isYou && { borderColor: accentColor, borderWidth: 2.5 },
+        node.isBot && styles.nodeCardBot,
       ]}>
         <View style={[
           styles.avatar,
-          { backgroundColor: node.isYou ? accentColor : avatarBg(node.seed) },
+          { backgroundColor: node.isYou ? accentColor : node.isBot ? '#546E7A' : avatarBg(node.seed) },
         ]}>
           {node.isDozed && <Text style={{ fontSize: 12 }}>💤</Text>}
+          {node.isBot && <Text style={styles.botAvatarText}>K</Text>}
         </View>
         <Text style={styles.nodeUsername} numberOfLines={1}>{node.username}</Text>
         <View style={styles.nodeKwRow}>
@@ -716,6 +743,7 @@ export default function MapScreen() {
   const [otherNodes, setOtherNodes] = useState<NodeData[]>([]);
   const [currentStatus, setCurrentStatus] = useState(session?.statusText ?? '');
   const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [keeperModalVisible, setKeeperModalVisible] = useState(false);
   const [editingStatus, setEditingStatus] = useState('');
   const [reactionTarget, setReactionTarget] = useState<NodeData | null>(null);
   const [sendingReaction, setSendingReaction] = useState(false);
@@ -838,6 +866,10 @@ export default function MapScreen() {
   }, [category, receivedReactionCount, session?.keywords, session?.mood, sessionSecs, streakDays]);
 
   const openReactionModal = useCallback((node: NodeData) => {
+    if (node.isBot) {
+      setKeeperModalVisible(true);
+      return;
+    }
     if (blockedUidSet.has(node.uid)) return;
     setReactionTarget(node);
   }, [blockedUidSet]);
@@ -921,7 +953,11 @@ export default function MapScreen() {
   };
 
   const visibleOtherNodes = otherNodes.filter((node) => !blockedUidSet.has(node.uid));
-  const spacedOtherNodes = spreadNodes(visibleOtherNodes, youNode);
+  const shouldShowKeeper = visibleOtherNodes.length <= KEEPER_VISIBLE_MAX_PEOPLE;
+  const displayOtherNodes = shouldShowKeeper
+    ? [...visibleOtherNodes, buildKeeperNode(category)]
+    : visibleOtherNodes;
+  const spacedOtherNodes = spreadNodes(displayOtherNodes, youNode);
   const allNodes: NodeData[] = [youNode, ...spacedOtherNodes];
   const connections = buildConnections(youNode.keywords, spacedOtherNodes);
   const rippleNode = allNodes.find((n) => n.id === rippleTargetId || n.hasRipple);
@@ -930,7 +966,7 @@ export default function MapScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <TopBar sessionSecs={sessionSecs} activeCount={allNodes.length} streakDays={streakDays} />
+      <TopBar sessionSecs={sessionSecs} activeCount={visibleOtherNodes.length + 1} streakDays={streakDays} />
 
       {/* Canvas */}
       <View
@@ -1040,6 +1076,70 @@ export default function MapScreen() {
               </Pressable>
             </Pressable>
           </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={keeperModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setKeeperModalVisible(false)}
+      >
+        <Pressable style={styles.keeperOverlay} onPress={() => setKeeperModalVisible(false)}>
+          <Pressable style={styles.keeperSheet}>
+            <View style={styles.keeperHeader}>
+              <View style={styles.keeperAvatar}>
+                <Text style={styles.keeperAvatarText}>K</Text>
+              </View>
+              <View style={styles.keeperTitleBlock}>
+                <Text style={styles.keeperTitle}>Room Keeper</Text>
+                <Text style={styles.keeperSub}>このルームの管理人です</Text>
+              </View>
+            </View>
+
+            <Text style={styles.keeperBody}>
+              人が少ない時間でも、ここで静かに作業できます。人が増えてきたら、Keeper はそっと下がります。
+            </Text>
+
+            <View style={styles.keeperMenu}>
+              <Pressable
+                style={({ pressed }) => [styles.keeperMenuItem, pressed && styles.pressed]}
+                onPress={() => {
+                  setKeeperModalVisible(false);
+                  openStatusModal();
+                }}
+              >
+                <Text style={styles.keeperMenuTitle}>今のひとことを変える</Text>
+                <Text style={styles.keeperMenuText}>マップ上の自分の状態を短く更新できます。</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.keeperMenuItem, pressed && styles.pressed]}
+                onPress={() => {
+                  setKeeperModalVisible(false);
+                  router.push('/history' as never);
+                }}
+              >
+                <Text style={styles.keeperMenuTitle}>今日までの履歴を見る</Text>
+                <Text style={styles.keeperMenuText}>チェックインの記録を振り返れます。</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.keeperMenuItem, pressed && styles.pressed]}
+                onPress={() => {
+                  setKeeperModalVisible(false);
+                  router.push('/settings' as never);
+                }}
+              >
+                <Text style={styles.keeperMenuTitle}>困ったとき・ブロック設定</Text>
+                <Text style={styles.keeperMenuText}>ブロック中のユーザーやアプリ設定を確認できます。</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.keeperFootnote}>
+              Keeper はリアクションやブロックの対象にはなりません。
+            </Text>
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -1170,6 +1270,19 @@ const styles = StyleSheet.create({
     width: 16, height: 16, borderRadius: 4,
     alignItems: 'center', justifyContent: 'center',
   },
+  botBadge: {
+    backgroundColor: '#546E7A',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
+  botBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
   nodePressTarget: {
     zIndex: 20,
     elevation: 20,
@@ -1189,9 +1302,20 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: 4,
   },
+  nodeCardBot: {
+    borderStyle: 'dashed',
+    borderColor: '#90A4AE',
+    backgroundColor: '#FBFCFD',
+  },
   avatar: {
     width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
+  },
+  botAvatarText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: 'Outfit_700Bold',
   },
   nodeUsername: {
     fontSize: 10, fontWeight: '600', color: Colors.charcoal,
@@ -1409,6 +1533,87 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#D32F2F',
     fontFamily: 'Outfit_600SemiBold',
+  },
+  keeperOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  keeperSheet: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: Colors.card,
+    borderRadius: 18,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  keeperHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  keeperAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#546E7A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keeperAvatarText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: 'Outfit_700Bold',
+  },
+  keeperTitleBlock: { flex: 1 },
+  keeperTitle: {
+    fontSize: 16,
+    color: Colors.charcoal,
+    fontFamily: 'Outfit_700Bold',
+  },
+  keeperSub: {
+    fontSize: 12,
+    color: Colors.slate,
+    marginTop: 2,
+  },
+  keeperBody: {
+    fontSize: 13,
+    color: Colors.charcoal,
+    lineHeight: 21,
+    marginBottom: 14,
+  },
+  keeperMenu: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.line,
+  },
+  keeperMenuItem: {
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.line,
+  },
+  keeperMenuTitle: {
+    fontSize: 14,
+    color: Colors.charcoal,
+    fontFamily: 'Outfit_700Bold',
+  },
+  keeperMenuText: {
+    fontSize: 12,
+    color: Colors.slate,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  keeperFootnote: {
+    fontSize: 11,
+    color: Colors.slate,
+    lineHeight: 16,
+    marginTop: 12,
   },
   pressed: {
     opacity: 0.65,
