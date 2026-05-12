@@ -411,9 +411,12 @@ function BottomBar({
   const [pomoSecs, setPomoSecs] = useState(POMO_SECS);
   const [pomoRunning, setPomoRunning] = useState(true);
   const [pomoPhase, setPomoPhase] = useState<PomoPhase>('focus');
+  const [notificationPrimerVisible, setNotificationPrimerVisible] = useState(false);
   const pomoEndsAtRef = useRef(Date.now() + POMO_SECS * 1000);
   const pomoNotificationIdRef = useRef<string | null>(null);
   const pomoNotificationRequestRef = useRef(0);
+  const notificationPrimerShownRef = useRef(false);
+  const pendingNotificationRef = useRef<{ seconds: number; phase: PomoNotificationPhase } | null>(null);
 
   const cancelPomoNotification = useCallback(async () => {
     pomoNotificationRequestRef.current += 1;
@@ -435,9 +438,14 @@ function BottomBar({
     try {
       const current = await Notifications.getPermissionsAsync();
       if (current.granted) return true;
+      if (!current.canAskAgain) return false;
 
-      const requested = await Notifications.requestPermissionsAsync();
-      return requested.granted;
+      if (!notificationPrimerShownRef.current) {
+        notificationPrimerShownRef.current = true;
+        setNotificationPrimerVisible(true);
+      }
+
+      return false;
     } catch (error) {
       console.warn('Failed to request notification permission', error);
       return false;
@@ -450,7 +458,12 @@ function BottomBar({
     const requestId = pomoNotificationRequestRef.current;
     const triggerSeconds = Math.max(1, Math.ceil(seconds));
     const hasPermission = await ensurePomoNotificationPermission();
-    if (!hasPermission || requestId !== pomoNotificationRequestRef.current) return;
+    if (!hasPermission) {
+      pendingNotificationRef.current = { seconds: triggerSeconds, phase };
+      return;
+    }
+    if (requestId !== pomoNotificationRequestRef.current) return;
+    pendingNotificationRef.current = null;
 
     const isFocus = phase === 'focus';
 
@@ -478,6 +491,32 @@ function BottomBar({
       console.warn('Failed to schedule pomodoro notification', error);
     }
   }, [cancelPomoNotification, ensurePomoNotificationPermission]);
+
+  const requestPomoNotificationPermission = useCallback(async () => {
+    setNotificationPrimerVisible(false);
+
+    try {
+      const requested = await Notifications.requestPermissionsAsync();
+      if (!requested.granted) {
+        pendingNotificationRef.current = null;
+        return;
+      }
+
+      const pending = pendingNotificationRef.current;
+      if (!pending) return;
+
+      pendingNotificationRef.current = null;
+      void schedulePomoNotification(pending.seconds, pending.phase);
+    } catch (error) {
+      console.warn('Failed to request notification permission', error);
+      pendingNotificationRef.current = null;
+    }
+  }, [schedulePomoNotification]);
+
+  const skipPomoNotificationPermission = useCallback(() => {
+    pendingNotificationRef.current = null;
+    setNotificationPrimerVisible(false);
+  }, []);
 
   useEffect(() => {
     void schedulePomoNotification(POMO_SECS, 'focus');
@@ -631,6 +670,30 @@ function BottomBar({
         <LogOut size={24} color={Colors.slate} strokeWidth={1.8} />
         <Text style={[styles.iconBtnLabel, { color: Colors.slate }]}>退出</Text>
       </Pressable>
+
+      <Modal
+        visible={notificationPrimerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={skipPomoNotificationPermission}
+      >
+        <Pressable style={styles.notificationPrimerOverlay} onPress={skipPomoNotificationPermission}>
+          <Pressable style={styles.notificationPrimerCard}>
+            <Text style={styles.notificationPrimerTitle}>ポモドーロ完了を通知しますか？</Text>
+            <Text style={styles.notificationPrimerBody}>
+              アプリを閉じていても、集中時間や休憩時間の終わりを知らせます。通知はタイマーを止めるとキャンセルされます。
+            </Text>
+            <View style={styles.notificationPrimerActions}>
+              <Pressable style={styles.notificationPrimerSecondary} onPress={skipPomoNotificationPermission}>
+                <Text style={styles.notificationPrimerSecondaryText}>あとで</Text>
+              </Pressable>
+              <Pressable style={[styles.notificationPrimerPrimary, { backgroundColor: accentColor }]} onPress={requestPomoNotificationPermission}>
+                <Text style={styles.notificationPrimerPrimaryText}>通知を許可</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1157,6 +1220,63 @@ const styles = StyleSheet.create({
   pomoTime: {
     fontSize: 16, fontWeight: '700',
     fontFamily: 'Outfit_700Bold', fontVariant: ['tabular-nums'],
+  },
+  notificationPrimerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  notificationPrimerCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: Colors.card,
+    borderRadius: 18,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  notificationPrimerTitle: {
+    fontSize: 17,
+    color: Colors.charcoal,
+    fontFamily: 'Outfit_700Bold',
+    marginBottom: 10,
+  },
+  notificationPrimerBody: {
+    fontSize: 13,
+    color: Colors.slate,
+    lineHeight: 20,
+    fontFamily: 'Outfit_500Medium',
+  },
+  notificationPrimerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 20,
+  },
+  notificationPrimerSecondary: {
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  notificationPrimerSecondaryText: {
+    fontSize: 14,
+    color: Colors.slate,
+    fontFamily: 'Outfit_600SemiBold',
+  },
+  notificationPrimerPrimary: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  notificationPrimerPrimaryText: {
+    fontSize: 14,
+    color: '#fff',
+    fontFamily: 'Outfit_700Bold',
   },
 
   // Status modal
