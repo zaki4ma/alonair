@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform, Alert, Image } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle,
   withRepeat, withSequence, withTiming, withDelay,
@@ -185,7 +185,10 @@ function TopBar({
 }) {
   return (
     <View style={styles.topBar}>
-      <Text style={styles.appName}>Alonair</Text>
+      <View style={styles.brandWrap}>
+        <Image source={require('../assets/icon.png')} style={styles.headerIcon} />
+        <Text style={styles.appName}>Alonair</Text>
+      </View>
       <View style={styles.activeWrap}>
         <View style={styles.activeDot} />
         <Text style={styles.activeText}>{activeCount}人が集中中</Text>
@@ -1043,6 +1046,16 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 16, fontWeight: '700', color: Colors.charcoal,
     fontFamily: 'Outfit_700Bold', letterSpacing: -0.3,
+  },
+  brandWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  headerIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
   },
   activeWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   activeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#66BB6A' },

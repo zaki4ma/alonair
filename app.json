@@ -11,15 +11,21 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#3346A0"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.alonair.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "作業環境を撮影してAIがDNAを解析します。",
+        "NSPhotoLibraryUsageDescription": "フォトライブラリから作業環境の写真を選択できます。"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#3346A0"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -29,7 +35,9 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ]
   }
 }
