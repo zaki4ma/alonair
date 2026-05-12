@@ -3,10 +3,10 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, ShieldOff, Trash2, X } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
 import { ensureAnonymousAuth, getUid } from '../store/auth';
-import { deleteUserData } from '../store/firestore';
+import { BlockDoc, deleteUserData, subscribeBlockedUsers, unblockUser } from '../store/firestore';
 import { clearSession } from '../store/session';
 import { useEffect, useState } from 'react';
 
@@ -30,6 +30,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [uid, setUid] = useState<string | null>(() => getUid());
   const [deleting, setDeleting] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<(BlockDoc & { id: string })[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -42,6 +43,11 @@ export default function SettingsScreen() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!uid) return;
+    return subscribeBlockedUsers(uid, setBlockedUsers);
+  }, [uid]);
 
   const accountId = uid ? uid.slice(0, 8) : '--------';
 
@@ -83,6 +89,29 @@ export default function SettingsScreen() {
     });
   };
 
+  const unblock = (blockedUid: string, blockedName: string) => {
+    if (!uid) return;
+
+    Alert.alert(
+      `${blockedName}のブロックを解除しますか？`,
+      '解除すると、同じカテゴリにいる時に再びマップ上に表示される可能性があります。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '解除',
+          onPress: async () => {
+            try {
+              await unblockUser(uid, blockedUid);
+            } catch (error) {
+              console.error('[Settings] unblock user', error);
+              Alert.alert('解除できませんでした', '通信状態を確認して、もう一度お試しください。');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -113,6 +142,34 @@ export default function SettingsScreen() {
             </View>
             <ChevronRight size={18} color={Colors.slate} strokeWidth={2} />
           </Pressable>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ブロック中のユーザー</Text>
+          {blockedUsers.length === 0 ? (
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>ブロック中のユーザーはいません</Text>
+            </View>
+          ) : (
+            blockedUsers.map((block) => (
+              <View key={block.id} style={styles.blockedRow}>
+                <View style={styles.actionLeft}>
+                  <ShieldOff size={18} color={Colors.slate} strokeWidth={2} />
+                  <View>
+                    <Text style={styles.rowLabel}>{block.blockedName || 'ユーザー'}</Text>
+                    <Text style={styles.blockedSub}>{block.blockedUid.slice(0, 8)}</Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [styles.unblockBtn, pressed && styles.pressed]}
+                  onPress={() => unblock(block.blockedUid, block.blockedName || 'ユーザー')}
+                  hitSlop={8}
+                >
+                  <X size={18} color={Colors.slate} strokeWidth={2} />
+                </Pressable>
+              </View>
+            ))
+          )}
         </View>
 
         <View style={styles.section}>
@@ -203,6 +260,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.line,
   },
+  blockedRow: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.line,
+  },
   actionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -217,6 +283,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.slate,
     fontFamily: 'Outfit_600SemiBold',
+  },
+  blockedSub: {
+    fontSize: 11,
+    color: Colors.slate,
+    marginTop: 2,
+    fontFamily: 'Outfit_500Medium',
+  },
+  unblockBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteText: {
     fontSize: 15,

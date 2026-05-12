@@ -47,6 +47,13 @@ export interface ReactionDoc {
   seen: boolean;
 }
 
+export interface BlockDoc {
+  blockerUid: string;
+  blockedUid: string;
+  blockedName: string;
+  createdAt: Timestamp;
+}
+
 // ── Write ──────────────────────────────────────────────────────────────────
 
 export async function saveCheckin(
@@ -112,6 +119,12 @@ export async function heartbeatCheckin(uid: string): Promise<void> {
 }
 
 export async function sendReaction(fromUid: string, toUid: string, kind: string): Promise<void> {
+  const [blockedBySender, blockedByReceiver] = await Promise.all([
+    getDoc(doc(db, 'blocks', `${fromUid}_${toUid}`)),
+    getDoc(doc(db, 'blocks', `${toUid}_${fromUid}`)),
+  ]);
+  if (blockedBySender.exists() || blockedByReceiver.exists()) return;
+
   await addDoc(collection(db, 'reactions'), {
     fromUid,
     toUid,
@@ -123,6 +136,25 @@ export async function sendReaction(fromUid: string, toUid: string, kind: string)
 
 export async function markReactionSeen(reactionId: string): Promise<void> {
   await updateDoc(doc(db, 'reactions', reactionId), { seen: true });
+}
+
+export async function blockUser(
+  blockerUid: string,
+  blockedUid: string,
+  blockedName: string
+): Promise<void> {
+  if (blockerUid === blockedUid) return;
+
+  await setDoc(doc(db, 'blocks', `${blockerUid}_${blockedUid}`), {
+    blockerUid,
+    blockedUid,
+    blockedName,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function unblockUser(blockerUid: string, blockedUid: string): Promise<void> {
+  await deleteDoc(doc(db, 'blocks', `${blockerUid}_${blockedUid}`));
 }
 
 export async function deleteUserData(uid: string): Promise<void> {
@@ -140,11 +172,16 @@ export async function deleteUserData(uid: string): Promise<void> {
     collection(db, 'reactions'),
     where('toUid', '==', uid)
   ));
+  const blockedByMeSnap = await getDocs(query(
+    collection(db, 'blocks'),
+    where('blockerUid', '==', uid)
+  ));
 
   const batch = writeBatch(db);
   historySnap.docs.forEach((historyDoc) => batch.delete(historyDoc.ref));
   sentReactionsSnap.docs.forEach((reactionDoc) => batch.delete(reactionDoc.ref));
   receivedReactionsSnap.docs.forEach((reactionDoc) => batch.delete(reactionDoc.ref));
+  blockedByMeSnap.docs.forEach((blockDoc) => batch.delete(blockDoc.ref));
   await batch.commit();
 }
 
@@ -192,6 +229,48 @@ export function subscribeIncomingReactions(
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as ReactionDoc) })));
   });
+}
+
+export function subscribeBlockedUsers(
+  uid: string,
+  callback: (docs: (BlockDoc & { id: string })[]) => void
+): () => void {
+  const q = query(
+    collection(db, 'blocks'),
+    where('blockerUid', '==', uid)
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as BlockDoc) })));
+  });
+}
+
+export function subscribeBlockedUidSet(
+  uid: string,
+  callback: (blockedUidSet: Set<string>) => void
+): () => void {
+  let blockedByMe = new Set<string>();
+  let blockingMe = new Set<string>();
+  const emit = () => callback(new Set([...blockedByMe, ...blockingMe]));
+
+  const unsubscribeBlockedByMe = onSnapshot(
+    query(collection(db, 'blocks'), where('blockerUid', '==', uid)),
+    (snap) => {
+      blockedByMe = new Set(snap.docs.map((d) => (d.data() as BlockDoc).blockedUid));
+      emit();
+    }
+  );
+  const unsubscribeBlockingMe = onSnapshot(
+    query(collection(db, 'blocks'), where('blockedUid', '==', uid)),
+    (snap) => {
+      blockingMe = new Set(snap.docs.map((d) => (d.data() as BlockDoc).blockerUid));
+      emit();
+    }
+  );
+
+  return () => {
+    unsubscribeBlockedByMe();
+    unsubscribeBlockingMe();
+  };
 }
 
 export async function getCheckinHistory(

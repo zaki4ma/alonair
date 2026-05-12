@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle,
   withRepeat, withSequence, withTiming, withDelay,
@@ -19,6 +19,7 @@ import {
   Settings,
   Check,
   Circle as CircleIcon,
+  ShieldOff,
 } from 'lucide-react-native';
 import { Colors, Categories, CategoryId } from '../constants/colors';
 import { getSession, setSession } from '../store/session';
@@ -29,7 +30,9 @@ import {
   heartbeatCheckin,
   markReactionSeen,
   sendReaction,
+  blockUser,
   subscribeActiveCheckins,
+  subscribeBlockedUidSet,
   subscribeIncomingReactions,
   updateCheckinStatus,
   CheckinDoc,
@@ -654,6 +657,7 @@ export default function MapScreen() {
   const [rippleTargetId, setRippleTargetId] = useState<string | null>(null);
   const [streakDays, setStreakDays] = useState(0);
   const [receivedReactionCount, setReceivedReactionCount] = useState(0);
+  const [blockedUidSet, setBlockedUidSet] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     const id = setInterval(() => setSessionSecs((s) => s + 1), 1000);
@@ -687,8 +691,14 @@ export default function MapScreen() {
     const uid = getUid();
     if (!uid) return;
     const unsubscribe = subscribeIncomingReactions(uid, (docs) => {
-      if (docs.length === 0) return;
-      setReceivedReactionCount((count) => count + docs.length);
+      const visibleDocs = docs.filter((reaction) => !blockedUidSet.has(reaction.fromUid));
+      if (visibleDocs.length === 0) {
+        docs.forEach((reaction) => {
+          if (blockedUidSet.has(reaction.fromUid)) markReactionSeen(reaction.id).catch(console.error);
+        });
+        return;
+      }
+      setReceivedReactionCount((count) => count + visibleDocs.length);
       setRippleTargetId('you');
       docs.forEach((reaction) => {
         markReactionSeen(reaction.id).catch(console.error);
@@ -696,6 +706,12 @@ export default function MapScreen() {
       setTimeout(() => setRippleTargetId((current) => current === 'you' ? null : current), 4200);
     });
     return unsubscribe;
+  }, [blockedUidSet]);
+
+  useEffect(() => {
+    const uid = getUid();
+    if (!uid) return;
+    return subscribeBlockedUidSet(uid, setBlockedUidSet);
   }, []);
 
   useEffect(() => {
@@ -756,11 +772,13 @@ export default function MapScreen() {
   }, [category, receivedReactionCount, session?.keywords, session?.mood, sessionSecs, streakDays]);
 
   const openReactionModal = useCallback((node: NodeData) => {
+    if (blockedUidSet.has(node.uid)) return;
     setReactionTarget(node);
-  }, []);
+  }, [blockedUidSet]);
 
   const handleSendReaction = useCallback(async (kind: string) => {
     if (!reactionTarget || sendingReaction) return;
+    if (blockedUidSet.has(reactionTarget.uid)) return;
 
     const now = Date.now();
     const cooldownUntil = reactionCooldowns[reactionTarget.uid] ?? 0;
@@ -791,7 +809,37 @@ export default function MapScreen() {
     } finally {
       setSendingReaction(false);
     }
-  }, [reactionTarget, reactionCooldowns, sendingReaction]);
+  }, [blockedUidSet, reactionTarget, reactionCooldowns, sendingReaction]);
+
+  const handleBlockUser = useCallback(() => {
+    if (!reactionTarget) return;
+
+    const target = reactionTarget;
+    Alert.alert(
+      `${target.username}をブロックしますか？`,
+      'お互いのマップに表示されなくなり、応援リアクションも送れなくなります。設定画面から解除できます。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'ブロック',
+          style: 'destructive',
+          onPress: async () => {
+            const uid = getUid();
+            if (!uid) return;
+
+            try {
+              await blockUser(uid, target.uid, target.username);
+              setBlockedUidSet((current) => new Set([...current, target.uid]));
+              setReactionTarget(null);
+            } catch (error) {
+              console.error('[Block]', error);
+              Alert.alert('ブロックできませんでした', '通信状態を確認して、もう一度お試しください。');
+            }
+          },
+        },
+      ]
+    );
+  }, [reactionTarget]);
 
   const youNode: NodeData = {
     id: 'you',
@@ -806,7 +854,8 @@ export default function MapScreen() {
     seed: 0,
   };
 
-  const spacedOtherNodes = spreadNodes(otherNodes, youNode);
+  const visibleOtherNodes = otherNodes.filter((node) => !blockedUidSet.has(node.uid));
+  const spacedOtherNodes = spreadNodes(visibleOtherNodes, youNode);
   const allNodes: NodeData[] = [youNode, ...spacedOtherNodes];
   const connections = buildConnections(youNode.keywords, spacedOtherNodes);
   const rippleNode = allNodes.find((n) => n.id === rippleTargetId || n.hasRipple);
@@ -965,6 +1014,13 @@ export default function MapScreen() {
                 {reactionDisabled ? '少し時間を置いて送れます' : '相手にはさりげない波紋だけが届きます'}
               </Text>
             </View>
+            <Pressable
+              style={({ pressed }) => [styles.blockUserBtn, pressed && styles.pressed]}
+              onPress={handleBlockUser}
+            >
+              <ShieldOff size={16} color="#D32F2F" strokeWidth={2} />
+              <Text style={styles.blockUserText}>このユーザーをブロック</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1205,5 +1261,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.slate,
     lineHeight: 16,
+  },
+  blockUserBtn: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.line,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  blockUserText: {
+    fontSize: 13,
+    color: '#D32F2F',
+    fontFamily: 'Outfit_600SemiBold',
+  },
+  pressed: {
+    opacity: 0.65,
   },
 });

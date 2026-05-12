@@ -110,7 +110,9 @@ service cloud.firestore {
         && request.resource.data.toUid is string
         && request.resource.data.toUid != request.auth.uid
         && request.resource.data.kind in ['focus', 'energy', 'calm']
-        && request.resource.data.seen == false;
+        && request.resource.data.seen == false
+        && !exists(/databases/$(database)/documents/blocks/$(request.auth.uid + '_' + request.resource.data.toUid))
+        && !exists(/databases/$(database)/documents/blocks/$(request.resource.data.toUid + '_' + request.auth.uid));
 
       allow update: if signedIn()
         && resource.data.toUid == request.auth.uid
@@ -119,6 +121,21 @@ service cloud.firestore {
 
       allow delete: if signedIn()
         && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+    }
+
+    match /blocks/{id} {
+      allow get, list: if signedIn();
+
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['blockerUid', 'blockedUid', 'blockedName', 'createdAt'])
+        && request.resource.data.blockerUid == request.auth.uid
+        && request.resource.data.blockedUid is string
+        && request.resource.data.blockedUid != request.auth.uid
+        && request.resource.data.blockedName is string
+        && request.resource.data.blockedName.size() <= 40
+        && id == request.auth.uid + '_' + request.resource.data.blockedUid;
+
+      allow delete: if signedIn() && resource.data.blockerUid == request.auth.uid;
     }
 
     match /{document=**} {
