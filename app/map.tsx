@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle,
@@ -401,22 +401,32 @@ function BottomBar({
   const [pomoSecs, setPomoSecs] = useState(POMO_SECS);
   const [pomoRunning, setPomoRunning] = useState(true);
   const [pomoPhase, setPomoPhase] = useState<PomoPhase>('focus');
+  const pomoEndsAtRef = useRef(Date.now() + POMO_SECS * 1000);
 
   useEffect(() => {
-    if (!pomoRunning || pomoPhase === 'done' || pomoSecs <= 0) return;
-    const id = setInterval(() => setPomoSecs((s) => Math.max(0, s - 1)), 1000);
+    if (!pomoRunning || pomoPhase === 'done') return;
+
+    const tick = () => {
+      const nextSecs = Math.max(0, Math.ceil((pomoEndsAtRef.current - Date.now()) / 1000));
+      setPomoSecs(nextSecs);
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [pomoPhase, pomoRunning, pomoSecs]);
+  }, [pomoPhase, pomoRunning]);
 
   useEffect(() => {
     if (pomoPhase !== 'focus' || pomoSecs > 0) return;
 
     setPomoPhase('done');
     setPomoRunning(false);
+    pomoEndsAtRef.current = Date.now();
 
     const id = setTimeout(() => {
       setPomoPhase('break');
       setPomoSecs(POMO_BREAK_SECS);
+      pomoEndsAtRef.current = Date.now() + POMO_BREAK_SECS * 1000;
       setPomoRunning(true);
     }, POMO_DONE_MS);
 
@@ -426,6 +436,7 @@ function BottomBar({
   useEffect(() => {
     if (pomoPhase !== 'break' || pomoSecs > 0) return;
     setPomoRunning(false);
+    pomoEndsAtRef.current = Date.now();
   }, [pomoPhase, pomoSecs]);
 
   const togglePomo = useCallback(() => {
@@ -433,11 +444,22 @@ function BottomBar({
     if (pomoPhase === 'break' && pomoSecs === 0) {
       setPomoPhase('focus');
       setPomoSecs(POMO_SECS);
+      pomoEndsAtRef.current = Date.now() + POMO_SECS * 1000;
       setPomoRunning(true);
       return;
     }
-    setPomoRunning((r) => !r);
-  }, [pomoPhase, pomoSecs]);
+
+    if (pomoRunning) {
+      const nextSecs = Math.max(0, Math.ceil((pomoEndsAtRef.current - Date.now()) / 1000));
+      setPomoSecs(nextSecs);
+      pomoEndsAtRef.current = Date.now();
+      setPomoRunning(false);
+      return;
+    }
+
+    pomoEndsAtRef.current = Date.now() + pomoSecs * 1000;
+    setPomoRunning(true);
+  }, [pomoPhase, pomoRunning, pomoSecs]);
 
   const pomoActive = pomoRunning || pomoPhase === 'done';
   const pomoBg = pomoPhase === 'done'
