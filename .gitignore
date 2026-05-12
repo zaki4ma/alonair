@@ -31,7 +31,15 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+GoogleService-Info.plist
+
+# local agent/tooling notes
+.claude/
+mockups/
+tasks/
+images/
 
 # typescript
 *.tsbuildinfo

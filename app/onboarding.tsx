@@ -480,9 +480,6 @@ export default function Onboarding() {
               >
                 <Text style={cta.btnText}>📷　写真を撮って入室する</Text>
               </Pressable>
-              <TouchableOpacity style={cta.secondaryBtn}>
-                <Text style={cta.secondaryText}>すでにアカウントをお持ちの方</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -556,12 +553,5 @@ const cta = StyleSheet.create({
     fontFamily: 'Outfit_600SemiBold',
     fontSize: 16,
     color: '#fff',
-  },
-  secondaryBtn: { alignItems: 'center', paddingVertical: 6 },
-  secondaryText: {
-    fontFamily: 'Outfit_400Regular',
-    fontSize: 13,
-    color: Colors.slate,
-    textDecorationLine: 'underline',
   },
 });
