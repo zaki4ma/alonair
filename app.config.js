@@ -1,10 +1,12 @@
-const fs = require('fs');
-const path = require('path');
+const appJson = require('./app.json');
+const expo = { ...appJson.expo };
 
-const plistPath = path.join(__dirname, 'GoogleService-Info.plist');
-const plistB64 = process.env.GOOGLE_SERVICE_INFO_PLIST;
-if (plistB64 && !fs.existsSync(plistPath)) {
-  fs.writeFileSync(plistPath, Buffer.from(plistB64, 'base64').toString('utf-8'));
+// In EAS builds, GOOGLE_SERVICE_INFO_PLIST is the path to the file secret
+if (process.env.GOOGLE_SERVICE_INFO_PLIST) {
+  expo.ios = {
+    ...expo.ios,
+    googleServicesFile: process.env.GOOGLE_SERVICE_INFO_PLIST,
+  };
 }
 
-module.exports = require('./app.json');
+module.exports = { ...appJson, expo };
