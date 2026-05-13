@@ -36,7 +36,15 @@
       "output": "static"
     },
     "plugins": [
-      "./plugins/withFirebaseModularHeaders",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
       "expo-router",
       "expo-font",
       [
@@ -50,15 +58,7 @@
       "expo-notifications",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "useFrameworks": "static",
-            "deploymentTarget": "15.1"
-          }
-        }
-      ]
+      "./plugins/withFirebaseModularHeaders"
     ],
     "extra": {
       "router": {},
