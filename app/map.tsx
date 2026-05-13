@@ -777,53 +777,93 @@ export default function MapScreen() {
   }, []);
 
   useEffect(() => {
-    const uid = getUid();
-    if (!uid) return;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    let cancelled = false;
 
-    heartbeatCheckin(uid).catch(console.error);
-    const id = setInterval(() => {
-      heartbeatCheckin(uid).catch(console.error);
-    }, 30_000);
+    ensureAnonymousAuth()
+      .then((uid) => {
+        if (cancelled) return;
+        heartbeatCheckin(uid).catch(console.error);
+        intervalId = setInterval(() => {
+          heartbeatCheckin(uid).catch(console.error);
+        }, 30_000);
+      })
+      .catch(console.error);
 
-    return () => clearInterval(id);
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
-    const uid = getUid();
-    const unsubscribe = subscribeActiveCheckins(category, (docs) => {
-      const nodes = docs
-        .filter((d) => d.uid !== uid)
-        .map(checkinToNode);
-      setOtherNodes(nodes);
-    });
-    return unsubscribe;
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    ensureAnonymousAuth()
+      .then((uid) => {
+        if (cancelled) return;
+        unsubscribe = subscribeActiveCheckins(category, (docs) => {
+          const nodes = docs
+            .filter((d) => d.uid !== uid)
+            .map(checkinToNode);
+          setOtherNodes(nodes);
+        });
+      })
+      .catch(console.error);
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [category]);
 
   useEffect(() => {
-    const uid = getUid();
-    if (!uid) return;
-    const unsubscribe = subscribeIncomingReactions(uid, (docs) => {
-      const visibleDocs = docs.filter((reaction) => !blockedUidSet.has(reaction.fromUid));
-      if (visibleDocs.length === 0) {
-        docs.forEach((reaction) => {
-          if (blockedUidSet.has(reaction.fromUid)) markReactionSeen(reaction.id).catch(console.error);
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    ensureAnonymousAuth()
+      .then((uid) => {
+        if (cancelled) return;
+        unsubscribe = subscribeIncomingReactions(uid, (docs) => {
+          const visibleDocs = docs.filter((reaction) => !blockedUidSet.has(reaction.fromUid));
+          if (visibleDocs.length === 0) {
+            docs.forEach((reaction) => {
+              if (blockedUidSet.has(reaction.fromUid)) markReactionSeen(reaction.id).catch(console.error);
+            });
+            return;
+          }
+          setReceivedReactionCount((count) => count + visibleDocs.length);
+          setRippleTargetId('you');
+          docs.forEach((reaction) => {
+            markReactionSeen(reaction.id).catch(console.error);
+          });
+          setTimeout(() => setRippleTargetId((current) => current === 'you' ? null : current), 4200);
         });
-        return;
-      }
-      setReceivedReactionCount((count) => count + visibleDocs.length);
-      setRippleTargetId('you');
-      docs.forEach((reaction) => {
-        markReactionSeen(reaction.id).catch(console.error);
-      });
-      setTimeout(() => setRippleTargetId((current) => current === 'you' ? null : current), 4200);
-    });
-    return unsubscribe;
+      })
+      .catch(console.error);
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, [blockedUidSet]);
 
   useEffect(() => {
-    const uid = getUid();
-    if (!uid) return;
-    return subscribeBlockedUidSet(uid, setBlockedUidSet);
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    ensureAnonymousAuth()
+      .then((uid) => {
+        if (cancelled) return;
+        unsubscribe = subscribeBlockedUidSet(uid, setBlockedUidSet);
+      })
+      .catch(console.error);
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {
