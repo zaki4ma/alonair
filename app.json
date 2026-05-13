@@ -18,8 +18,7 @@
       "bundleIdentifier": "com.alonair.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "作業環境を撮影してAIがDNAを解析します。",
-        "NSPhotoLibraryUsageDescription": "フォトライブラリから作業環境の写真を選択できます。"
+        "NSCameraUsageDescription": "作業環境を撮影してAIがDNAを解析します。"
       }
     },
     "android": {

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Dimensions,
+  View, Text, StyleSheet, ScrollView, Dimensions, Image,
   TouchableOpacity, Pressable, NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -467,7 +467,7 @@ export default function Onboarding() {
           <View style={cta.content}>
             <View style={cta.logoWrap}>
               <View style={cta.logoIcon}>
-                <Text style={{ fontSize: 22 }}>⬡</Text>
+                <Image source={require('../assets/icon.png')} style={cta.logoImage} />
               </View>
               <Text style={cta.appName}>Alonair</Text>
               <Text style={cta.tagline}>今日、何をしますか？</Text>
@@ -519,13 +519,15 @@ const cta = StyleSheet.create({
   logoWrap: { gap: 6 },
   logoIcon: {
     width: 48, height: 48, borderRadius: 14,
-    backgroundColor: Categories.study.color,
+    backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 12,
     shadowColor: Categories.study.color,
     shadowOpacity: 0.32, shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
+    overflow: 'hidden',
   },
+  logoImage: { width: 48, height: 48 },
   appName: {
     fontFamily: 'Outfit_700Bold',
     fontSize: 38,

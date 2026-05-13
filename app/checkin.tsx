@@ -58,20 +58,18 @@ export default function CheckinScreen() {
     if (!picked.canceled && picked.assets?.[0]) await processImage(picked.assets[0]);
   }, [processImage]);
 
-  const openGallery = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('写真へのアクセスが必要です'); return;
-    }
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.6, base64: true, allowsEditing: true, aspect: [4, 3],
-    });
-    if (!picked.canceled && picked.assets?.[0]) await processImage(picked.assets[0]);
-  }, [processImage]);
-
   const reset = useCallback(() => {
     setPhase('select'); setImageUri(null); setResult(null);
     setStatusText(''); setApiError(null);
+  }, []);
+
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/onboarding' as never);
   }, []);
 
   const checkin = useCallback(async () => {
@@ -115,8 +113,7 @@ export default function CheckinScreen() {
           category={category}
           onCategory={setCategory}
           onCamera={openCamera}
-          onGallery={openGallery}
-          onBack={() => router.back()}
+          onBack={goBack}
           error={apiError}
           bottomPad={insets.bottom}
         />
@@ -142,12 +139,11 @@ export default function CheckinScreen() {
 // ── Phase: Select ──────────────────────────────────────────────────────────
 
 function SelectPhase({
-  category, onCategory, onCamera, onGallery, onBack, error, bottomPad,
+  category, onCategory, onCamera, onBack, error, bottomPad,
 }: {
   category: CategoryId;
   onCategory: (c: CategoryId) => void;
   onCamera: () => void;
-  onGallery: () => void;
   onBack: () => void;
   error: string | null;
   bottomPad: number;
@@ -200,11 +196,6 @@ function SelectPhase({
         <Pressable style={[styles.primaryBtn, { backgroundColor: cat.color }]} onPress={onCamera}>
           <Text style={styles.primaryBtnIcon}>📷</Text>
           <Text style={styles.primaryBtnText}>カメラで撮影</Text>
-        </Pressable>
-
-        <Pressable style={styles.secondaryBtn} onPress={onGallery}>
-          <Text style={styles.secondaryBtnIcon}>🖼️</Text>
-          <Text style={styles.secondaryBtnText}>フォトライブラリから選ぶ</Text>
         </Pressable>
 
         <Text style={styles.privacyNote}>
@@ -463,15 +454,6 @@ const styles = StyleSheet.create({
   },
   primaryBtnIcon: { fontSize: 20 },
   primaryBtnText: { fontSize: 15, fontWeight: '700', color: '#fff', fontFamily: 'Outfit_700Bold' },
-
-  secondaryBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginHorizontal: 20, marginTop: 10, paddingVertical: 14,
-    borderRadius: 14, backgroundColor: Colors.card,
-    borderWidth: 1, borderColor: Colors.line,
-  },
-  secondaryBtnIcon: { fontSize: 18 },
-  secondaryBtnText: { fontSize: 14, fontWeight: '500', color: Colors.charcoal, fontFamily: 'Outfit_500Medium' },
 
   privacyNote: {
     fontSize: 10, color: Colors.slate, textAlign: 'center',
