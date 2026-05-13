@@ -127,14 +127,12 @@ export default function SummaryScreen() {
           </View>
         </View>
 
-        <View style={styles.reactionCard}>
-          <Heart size={20} color="#EC407A" strokeWidth={2.2} />
-          <Text style={styles.reactionText}>
-            {reactionCount > 0
-              ? `${reactionCount}件の応援が届きました`
-              : '今回は応援リアクションはありませんでした'}
-          </Text>
-        </View>
+        {reactionCount > 0 && (
+          <View style={styles.reactionCard}>
+            <Heart size={20} color="#EC407A" strokeWidth={2.2} />
+            <Text style={styles.reactionText}>{reactionCount}件の応援が届きました</Text>
+          </View>
+        )}
 
         <View style={styles.actions}>
           <Pressable style={[styles.primaryBtn, { backgroundColor: cat.color }]} onPress={goCheckin}>
