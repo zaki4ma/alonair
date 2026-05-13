@@ -56,6 +56,7 @@
         }
       ],
       "expo-notifications",
+      "./plugins/withGoogleServicesFile",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "./plugins/withFirebaseModularHeaders"
