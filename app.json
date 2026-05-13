@@ -46,13 +46,16 @@
           "microphonePermission": false
         }
       ],
+      "expo-notifications",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      "@react-native-firebase/firestore",
       [
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "useFrameworks": "static",
+            "deploymentTarget": "13.4"
           }
         }
       ]
