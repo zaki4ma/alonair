@@ -56,7 +56,8 @@
         }
       ],
       "expo-notifications",
-      "@react-native-firebase/app"
+      "@react-native-firebase/app",
+      "./plugins/withFirebaseModularHeaders"
     ],
     "extra": {
       "router": {},
