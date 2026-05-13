@@ -9,77 +9,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Categories, CategoryId } from '../constants/colors';
 import { setSession } from '../store/session';
-import { getUid } from '../store/auth';
+import { ensureAnonymousAuth, getUid } from '../store/auth';
 import { saveCheckin } from '../store/firestore';
-
-const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
+import { analyzeCheckinPhoto, type DNAResult } from '../store/gemini';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type Phase = 'select' | 'analyzing' | 'result';
-
-interface DNAResult {
-  keywords: string[];
-  category: CategoryId;
-  colorTemp: number; // 0=warm, 1=cool
-  density: number;   // 0=sparse, 1=dense
-  tools: string[];
-  mood: string;      // 集中 | 発想 | 創造 | 探索
-}
-
-// ── Gemini API ─────────────────────────────────────────────────────────────
-
-async function analyzeWithGemini(base64: string): Promise<DNAResult> {
-  if (!GEMINI_KEY) throw new Error('APIキーが設定されていません (.env)');
-
-  const prompt = `Analyze this photo of a solo activity or workspace. Return ONLY a JSON object:
-{
-  "keywords": ["2-4 Japanese strings of activity/topic"],
-  "category": "study|work|read|gym|walk|fish|drink|cook|make|misc",
-  "colorTemp": 0.0,
-  "density": 0.0,
-  "tools": ["detected items in Japanese"],
-  "mood": "集中|発想|創造|探索"
-}
-colorTemp: 0.0=warm orange/amber, 1.0=cool blue/gray
-density: 0.0=sparse minimal, 1.0=dense packed
-Return raw JSON only, no markdown.`;
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [
-          { text: prompt },
-          { inline_data: { mime_type: 'image/jpeg', data: base64 } },
-        ]}],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
-      }),
-    }
-  );
-
-  const json = await res.json();
-
-  if (!res.ok) {
-    const msg = json?.error?.message ?? `HTTP ${res.status}`;
-    throw new Error(`Gemini: ${msg}`);
-  }
-
-  const parts = json.candidates?.[0]?.content?.parts ?? [];
-  const raw: string = parts.map((p: { text?: string }) => p.text ?? '').join('');
-  const finishReason = json.candidates?.[0]?.finishReason ?? 'unknown';
-
-  if (!raw) throw new Error(`Gemini応答が空です (${finishReason})`);
-
-  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  try {
-    return JSON.parse(cleaned) as DNAResult;
-  } catch {
-    throw new Error(`JSON解析失敗 (${finishReason}): ${cleaned.slice(0, 120)}`);
-  }
-}
 
 // ── Root screen ────────────────────────────────────────────────────────────
 
@@ -98,7 +34,8 @@ export default function CheckinScreen() {
     setPhase('analyzing');
     setApiError(null);
     try {
-      const r = await analyzeWithGemini(asset.base64);
+      await ensureAnonymousAuth();
+      const r = await analyzeCheckinPhoto(asset.base64, asset.mimeType ?? 'image/jpeg');
       setResult(r);
       if (r.category && r.category in Categories) setCategory(r.category as CategoryId);
       setPhase('result');

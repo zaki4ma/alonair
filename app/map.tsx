@@ -444,6 +444,7 @@ function BottomBar({
   const pomoNotificationRequestRef = useRef(0);
   const notificationPrimerShownRef = useRef(false);
   const pendingNotificationRef = useRef<{ seconds: number; phase: PomoNotificationPhase } | null>(null);
+  const doneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cancelPomoNotification = useCallback(async () => {
     pomoNotificationRequestRef.current += 1;
@@ -548,9 +549,25 @@ function BottomBar({
   useEffect(() => {
     void schedulePomoNotification(POMO_SECS, 'focus');
     return () => {
+      if (doneTimeoutRef.current) clearTimeout(doneTimeoutRef.current);
       void cancelPomoNotification();
     };
   }, [cancelPomoNotification, schedulePomoNotification]);
+
+  const clearDoneTimeout = useCallback(() => {
+    if (!doneTimeoutRef.current) return;
+    clearTimeout(doneTimeoutRef.current);
+    doneTimeoutRef.current = null;
+  }, []);
+
+  const startFocusPomo = useCallback(() => {
+    clearDoneTimeout();
+    setPomoPhase('focus');
+    setPomoSecs(POMO_SECS);
+    pomoEndsAtRef.current = Date.now() + POMO_SECS * 1000;
+    setPomoRunning(true);
+    void schedulePomoNotification(POMO_SECS, 'focus');
+  }, [clearDoneTimeout, schedulePomoNotification]);
 
   useEffect(() => {
     if (!pomoRunning || pomoPhase === 'done') return;
@@ -573,7 +590,9 @@ function BottomBar({
     setPomoRunning(false);
     pomoEndsAtRef.current = Date.now();
 
-    const id = setTimeout(() => {
+    clearDoneTimeout();
+    doneTimeoutRef.current = setTimeout(() => {
+      doneTimeoutRef.current = null;
       setPomoPhase('break');
       setPomoSecs(POMO_BREAK_SECS);
       pomoEndsAtRef.current = Date.now() + POMO_BREAK_SECS * 1000;
@@ -581,8 +600,8 @@ function BottomBar({
       void schedulePomoNotification(POMO_BREAK_SECS, 'break');
     }, POMO_DONE_MS);
 
-    return () => clearTimeout(id);
-  }, [cancelPomoNotification, pomoPhase, pomoSecs, schedulePomoNotification]);
+    return clearDoneTimeout;
+  }, [cancelPomoNotification, clearDoneTimeout, pomoPhase, pomoSecs, schedulePomoNotification]);
 
   useEffect(() => {
     if (pomoPhase !== 'break' || pomoSecs > 0) return;
@@ -592,13 +611,12 @@ function BottomBar({
   }, [cancelPomoNotification, pomoPhase, pomoSecs]);
 
   const togglePomo = useCallback(() => {
-    if (pomoPhase === 'done') return;
+    if (pomoPhase === 'done') {
+      startFocusPomo();
+      return;
+    }
     if (pomoPhase === 'break' && pomoSecs === 0) {
-      setPomoPhase('focus');
-      setPomoSecs(POMO_SECS);
-      pomoEndsAtRef.current = Date.now() + POMO_SECS * 1000;
-      setPomoRunning(true);
-      void schedulePomoNotification(POMO_SECS, 'focus');
+      startFocusPomo();
       return;
     }
 
@@ -614,7 +632,7 @@ function BottomBar({
     pomoEndsAtRef.current = Date.now() + pomoSecs * 1000;
     setPomoRunning(true);
     void schedulePomoNotification(pomoSecs, pomoPhase === 'break' ? 'break' : 'focus');
-  }, [cancelPomoNotification, pomoPhase, pomoRunning, pomoSecs, schedulePomoNotification]);
+  }, [cancelPomoNotification, pomoPhase, pomoRunning, pomoSecs, schedulePomoNotification, startFocusPomo]);
 
   const pomoActive = pomoRunning || pomoPhase === 'done';
   const pomoBg = pomoPhase === 'done'
