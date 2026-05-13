@@ -1342,7 +1342,13 @@ const styles = StyleSheet.create({
   nodeKwRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, justifyContent: 'center' },
   nodeKwPill: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6 },
   nodeKwText: { fontSize: 9, fontWeight: '600', fontFamily: 'Outfit_600SemiBold' },
-  nodeStatus: { fontSize: 9, color: Colors.slate, fontStyle: 'italic' },
+  nodeStatus: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: Colors.charcoal,
+    fontFamily: 'Outfit_600SemiBold',
+    textAlign: 'center',
+  },
 
   // Bottom bar
   bottomBar: {
