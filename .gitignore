@@ -35,7 +35,6 @@ yarn-error.*
 # local env files
 .env
 .env*.local
-GoogleService-Info.plist
 
 # local agent/tooling notes
 .claude/
@@ -49,3 +48,6 @@ images/
 # generated native folders
 /ios
 /android
+
+# sample
+sample/

@@ -17,8 +17,10 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.alonair.app",
       "buildNumber": "1",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSCameraUsageDescription": "作業環境を撮影してAIがDNAを解析します。"
+        "NSCameraUsageDescription": "作業環境を撮影してAIがDNAを解析します。",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -36,8 +38,22 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": false,
+          "cameraPermission": "作業環境を撮影してAIがDNAを解析します。",
+          "microphonePermission": false
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "637a4891-1f48-45b2-8a00-abf86fe3c9eb"
+      }
+    }
   }
 }
