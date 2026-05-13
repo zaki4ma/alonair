@@ -20,7 +20,7 @@
       "env": {
         "GOOGLE_SERVICE_INFO_PLIST": "$GOOGLE_SERVICE_INFO_PLIST"
       },
-      "prebuildCommand": "node -e \"const fs=require('fs');fs.writeFileSync('./GoogleService-Info.plist',Buffer.from(process.env.GOOGLE_SERVICE_INFO_PLIST,'base64').toString())\""
+      "prebuildCommand": "cp $GOOGLE_SERVICE_INFO_PLIST ./GoogleService-Info.plist"
     }
   },
   "submit": {
