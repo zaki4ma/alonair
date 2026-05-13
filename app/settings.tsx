@@ -185,6 +185,24 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>法務</Text>
+          <Pressable
+            style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
+            onPress={() => router.push('/privacy' as never)}
+          >
+            <Text style={styles.rowLabel}>プライバシーポリシー</Text>
+            <ChevronRight size={18} color={Colors.slate} strokeWidth={2} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
+            onPress={() => router.push('/terms' as never)}
+          >
+            <Text style={styles.rowLabel}>利用規約</Text>
+            <ChevronRight size={18} color={Colors.slate} strokeWidth={2} />
+          </Pressable>
+        </View>
+
+        <View style={styles.section}>
           <Pressable
             style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
             onPress={sendFeedback}
